@@ -1,0 +1,35 @@
+# ========== Training Settings ==========
+num_epochs: 100
+batch_size: 1
+lr: 0.0002
+lambda_L1: 100
+use_perceptual: true
+use_semantic: true
+save_every: 1
+revert_epoch: 60
+lambda_identity: 10
+
+# ========== Paths ==========
+photo_dir: data/train/photo
+cartoon_dir: data/train/cartoon
+checkpoint_dir: checkpoints
+output_dir: outputs
+resume_path: checkpoints/full_state_best.pth
+
+# ========== Validation ==========
+val_split: 0.2
+
+# ========== Generator ==========
+generator:
+  in_channels: 3
+  out_channels: 3
+  use_semantic: true
+
+# ========== Discriminator ==========
+discriminator:
+  use_semantic: true
+
+# ========== Loss Weights ==========
+loss_weights:
+  perceptual: 0.05
+  ssim_threshold: 0.25

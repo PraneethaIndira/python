@@ -1,0 +1,23 @@
+# Core Deep Learning
+torch==2.5.1+cu121
+torchvision==0.16.1+cu121
+torchaudio==2.5.1+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Image Processing & Logging
+imageio>=2.31.0
+pillow>=10.0.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+
+# SSIM Evaluation
+pytorch-msssim>=1.0.0
+
+# Optional: for progress bars and CLI polish
+tqdm>=4.66.0
+
+# Your own modules
+-e .
+
+pip install scikit-image
+pip install onnxruntime numpy pillow

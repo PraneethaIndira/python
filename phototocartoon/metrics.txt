@@ -1,0 +1,6 @@
+Epoch [1/100] | D Loss: 0.2160 | G Adv: 2.1245 | G L1: 0.2547 | G Identity: 0.1796 | G Perceptual: 0.0070 | SSIM: 0.0000
+Epoch 1: Training started with smoother upsampling generator
+Epoch [2/100] | D Loss: 0.1868 | G Adv: 2.3441 | G L1: 0.2561 | G Identity: 0.1860 | G Perceptual: 0.0071 | SSIM: 0.0000
+Epoch [1/100] | D Loss: 0.2199 | G Adv: 1.9797 | G L1: 0.2556 | G Identity: 0.1827 | G Perceptual: 0.0070 | SSIM: 0.0000
+Epoch 1: Training started with smoother upsampling generator
+Epoch [2/100] | D Loss: 0.1949 | G Adv: 2.3179 | G L1: 0.2547 | G Identity: 0.1854 | G Perceptual: 0.0070 | SSIM: 0.0000
