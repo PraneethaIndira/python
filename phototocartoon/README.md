@@ -1,4 +1,4 @@
-## 📘 `README.md`
+## 📘 `README`
 
 # 🎨 Enhanced Pix2Pix Cartoonification Pipeline
 
