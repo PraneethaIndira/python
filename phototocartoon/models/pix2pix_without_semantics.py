@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 # -------------------------
-# U-Net Block
+# Generator (U-Net style with smoother upsampling)
 # -------------------------
 class UNetBlock(nn.Module):
     def __init__(self, in_channels, out_channels, down=True, use_dropout=False):
@@ -19,25 +18,40 @@ class UNetBlock(nn.Module):
                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
                 nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=False),
                 nn.InstanceNorm2d(out_channels, affine=True),
-                nn.ReLU(inplace=False)
+                nn.ReLU(inplace=True)
             )
         if use_dropout:
             self.block.add_module("dropout", nn.Dropout(0.5))
 
     def forward(self, x):
         return self.block(x)
+# class UNetBlock(nn.Module):
+#     def __init__(self, in_channels, out_channels, down=True, use_dropout=False):
+#         super().__init__()
+#         if down:
+#             self.block = nn.Sequential(
+#                 nn.Conv2d(in_channels, out_channels, 4, 2, 1, bias=False),
+#                 nn.BatchNorm2d(out_channels),
+#                 nn.LeakyReLU(0.2, inplace=True)
+#             )
+#         else:
+#             self.block = nn.Sequential(
+#                 nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
+#                 nn.Conv2d(in_channels, out_channels, 3, 1, 1, bias=False),
+#                 nn.BatchNorm2d(out_channels),
+#                 nn.ReLU(inplace=True)
+#             )
+#         if use_dropout:
+#             self.block.add_module("dropout", nn.Dropout(0.5))
+#
+#     def forward(self, x):
+#         return self.block(x)
 
-# -------------------------
-# Generator (Semantic-aware U-Net)
-# -------------------------
 class Generator(nn.Module):
-    def __init__(self, in_channels=8, out_channels=3, use_semantic=False):
+    def __init__(self, in_channels=3, out_channels=3):
         super().__init__()
-        self.use_semantic = use_semantic
-        self.in_channels = in_channels if use_semantic else 4
-        print(f"Generator initialized with in_channels = {self.in_channels}")
         # Encoder
-        self.down1 = UNetBlock(self.in_channels, 64, down=True)
+        self.down1 = UNetBlock(in_channels, 64, down=True)
         self.down2 = UNetBlock(64, 128, down=True)
         self.down3 = UNetBlock(128, 256, down=True)
         self.down4 = UNetBlock(256, 512, down=True)
@@ -45,7 +59,7 @@ class Generator(nn.Module):
         self.down6 = UNetBlock(512, 512, down=True)
         self.down7 = UNetBlock(512, 512, down=True)
         self.down8 = nn.Sequential(
-            nn.Conv2d(512, 512, 3, 1, 1),
+            nn.Conv2d(512, 512, 4, 2, 1),
             nn.ReLU()
         )
 
@@ -63,79 +77,32 @@ class Generator(nn.Module):
             nn.Tanh()
         )
 
-        # Optional detail branch
-        self.detail_branch = nn.Sequential(
-            nn.Conv2d(self.in_channels, 64, 3, 1, 1),
-            nn.InstanceNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(64, out_channels, 3, 1, 1),
-            nn.Tanh()
-        )
-
-    def forward(self, x, patch=None):
+    def forward(self, x):
         d1 = self.down1(x)
-        #print("d1:", d1.shape)
-
         d2 = self.down2(d1)
-        #print("d2:", d2.shape)
-
         d3 = self.down3(d2)
-       # print("d3:", d3.shape)
         d4 = self.down4(d3)
-        #print("d4:", d4.shape)
         d5 = self.down5(d4)
-        #print("d5:", d5.shape)
         d6 = self.down6(d5)
-        #print("d6:", d6.shape)
         d7 = self.down7(d6)
-        #print("d7:", d7.shape)
         d8 = self.down8(d7)
-        #print("d8:", d8.shape)
-       # d8 = F.interpolate(d8, scale_factor=2, mode='bilinear', align_corners=True)  # → [B, 512, 2, 2]
-        assert d8.shape[2] > 0 and d8.shape[3] > 0, f"Invalid spatial size in d8: {d8.shape}"
 
         u1 = self.up1(d8)
-        u1 = F.interpolate(u1, size=d7.shape[2:], mode='bilinear', align_corners=True)
-        #print("u1:", u1.shape, "d7:", d7.shape)
-        #print("u1:", u1.shape)
         u2 = self.up2(torch.cat([u1, d7], 1))
-        #print("u2:", u2.shape)
         u3 = self.up3(torch.cat([u2, d6], 1))
-        #print("u3:", u3.shape)
         u4 = self.up4(torch.cat([u3, d5], 1))
-        #print("u4:", u4.shape)
         u5 = self.up5(torch.cat([u4, d4], 1))
-        #print("u5:", u5.shape)
         u6 = self.up6(torch.cat([u5, d3], 1))
-        #print("u6:", u6.shape)
         u7 = self.up7(torch.cat([u6, d2], 1))
-        #print("u7:", u7.shape)
-        assert u7.shape[2:] == d1.shape[2:], f"Shape mismatch before final concat: u7={u7.shape}, d1={d1.shape}"
-        u8_input = torch.cat([u7, d1], dim=1)
-        u8 = self.up8(u8_input)
-
-       # print("u8:", u8.shape)
-        if self.use_semantic and isinstance(patch, torch.Tensor):
-            try:
-                if patch.dim() != 4:
-                    raise ValueError(f"Expected patch to be 4D, got shape {patch.shape}")
-                assert patch.shape[2] > 0 and patch.shape[3] > 0, f"Patch collapsed: {patch.shape}"
-                assert not torch.isnan(patch).any(), "Patch contains NaNs"
-                detail_out = self.detail_branch(patch)
-                return 0.7 * u8 + 0.3 * detail_out
-            except Exception as e:
-                print(f"💥 Semantic branch failed: {e}")
-                return u8
-        else:
-            return u8
+        u8 = self.up8(torch.cat([u7, d1], 1))
+        return u8
 
 # -------------------------
 # Discriminator (PatchGAN)
 # -------------------------
 class Discriminator(nn.Module):
-    def __init__(self, use_semantic=False):
+    def __init__(self, in_channels=6):
         super().__init__()
-        in_channels = 11 if use_semantic else 6
         self.model = nn.Sequential(
             nn.Conv2d(in_channels, 64, 4, 2, 1),
             nn.LeakyReLU(0.2, inplace=True),
@@ -157,3 +124,27 @@ class Discriminator(nn.Module):
 
     def forward(self, x):
         return self.model(x)
+# class Discriminator(nn.Module):
+#     def __init__(self, in_channels=6):
+#         super().__init__()
+#         self.model = nn.Sequential(
+#             nn.Conv2d(in_channels, 64, 4, 2, 1),
+#             nn.LeakyReLU(0.2, inplace=True),
+#
+#             nn.Conv2d(64, 128, 4, 2, 1),
+#             nn.BatchNorm2d(128),
+#             nn.LeakyReLU(0.2, inplace=True),
+#
+#             nn.Conv2d(128, 256, 4, 2, 1),
+#             nn.BatchNorm2d(256),
+#             nn.LeakyReLU(0.2, inplace=True),
+#
+#             nn.Conv2d(256, 512, 4, 1, 1),
+#             nn.BatchNorm2d(512),
+#             nn.LeakyReLU(0.2, inplace=True),
+#
+#             nn.Conv2d(512, 1, 4, 1, 1)  # PatchGAN output
+#         )
+#
+#     def forward(self, x):
+#         return self.model(x)

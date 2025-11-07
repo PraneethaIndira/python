@@ -33,8 +33,8 @@ class CartoonDataset(Dataset):
         cartoon_tensor = self.transform(cartoon)
 
         if self.use_semantic:
-            mask_tensor = extract_mask(photo_tensor, region="face")
-            patch_tensor = extract_patch(photo_tensor, mask_tensor)
+            mask_tensor = extract_mask(photo_tensor, region="face", filename=filename)
+            patch_tensor = extract_patch(photo_tensor, mask_tensor, filename=filename)
             return photo_tensor, cartoon_tensor, mask_tensor, patch_tensor, filename
         else:
             return photo_tensor, cartoon_tensor,filename

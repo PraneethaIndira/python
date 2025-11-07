@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import mediapipe as mp
 import torch.nn.functional as F
+from datetime import datetime
 
 # Initialize Mediapipe face mesh
 mp_face_mesh = mp.solutions.face_mesh
@@ -15,12 +16,13 @@ FACIAL_REGIONS = {
     "face": list(range(0, 468))        # Full face mesh
 }
 
-def extract_mask(image_tensor, region="face"):
+def extract_mask(image_tensor, region="face", filename=None):
     """
     Extracts a binary mask for the specified facial region.
     Args:
         image_tensor: torch.Tensor of shape [3, H, W], normalized [-1, 1]
         region: one of "eyes", "mouth", "face"
+        filename: optional string for logging
     Returns:
         mask_tensor: torch.Tensor of shape [1, H, W], values in {0, 1}
     """
@@ -46,17 +48,21 @@ def extract_mask(image_tensor, region="face"):
         cv2.fillPoly(mask, [points], 255)
     else:
         print("⚠️ No face landmarks detected — returning empty mask")
+        if filename:
+            with open("skipped_samples.txt", "a") as f:
+                f.write(f"{datetime.now()} — Skipped {filename} due to missing face landmarks\n")
 
     # Convert to tensor
     mask_tensor = torch.from_numpy(mask).float().div(255.0).unsqueeze(0)  # [1, H, W]
     return mask_tensor
 
-def extract_patch(image_tensor, mask_tensor):
+def extract_patch(image_tensor, mask_tensor, filename=None):
     """
     Crops a patch from the image using the mask bounding box.
     Args:
         image_tensor: [3, H, W]
         mask_tensor: [1, H, W]
+        filename: optional string for logging
     Returns:
         patch_tensor: [3, H', W']
     """
@@ -64,10 +70,13 @@ def extract_patch(image_tensor, mask_tensor):
     coords = cv2.findNonZero((mask_np * 255).astype(np.uint8))
     if coords is None:
         print("⚠️ Empty mask — returning zero patch")
+        if filename:
+            with open("skipped_samples.txt", "a") as f:
+                f.write(f"{datetime.now()} — Skipped {filename} due to empty mask for patch\n")
         return torch.zeros((3, 256, 256), dtype=image_tensor.dtype)
+
     x, y, w, h = cv2.boundingRect(coords)
     patch = image_tensor[:, y:y+h, x:x+w]
-    # Resize patch to match input size (e.g., 256×256)
     patch = F.interpolate(patch.unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False).squeeze(0)
 
     return patch
